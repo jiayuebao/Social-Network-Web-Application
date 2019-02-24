@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"reflect"
@@ -75,32 +76,48 @@ func createIndexIfNotExist() {
 }
 
 func handlerPost(w http.ResponseWriter, r *http.Request) {
+
 	// Parse from body of request to get a json object.
-	fmt.Println("Received on post request")
+	fmt.Println("Received one post request")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
 
-	decoder := json.NewDecoder(r.Body)
-	var p Post
-	if err := decoder.Decode(&p); err != nil {
-		panic(err)
+	lat, _ := strconv.ParseFloat(r.FormValue("lat"), 64)
+	lon, _ := strconv.ParseFloat(r.FormValue("lon"), 64)
+
+	p := &Post{
+		User:    r.FormValue("user"),
+		Message: r.FormValue("message"),
+		Location: Location{
+			Lat: lat,
+			Lon: lon,
+		},
 	}
 
-	fmt.Fprintf(w, "Post received: %v %s %v %v\n", p.User, p.Message,
-		p.Location.Lat, p.Location.Lon)
-
 	id := uuid.New()
-	err := saveToES(&p, id)
+	file, _, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Failed to save post to ElasticSearch",
-			http.StatusInternalServerError)
+		http.Error(w, "Image is not available", http.StatusBadRequest)
+		fmt.Printf("Image is not available %v.\n", err)
+		return
+	}
+	attrs, err := saveToGCS(file, BUCKET_NAME, id)
+	if err != nil {
+		http.Error(w, "Failed to save image to GCS", http.StatusInternalServerError)
+		fmt.Printf("Failed to save image to GCS %v.\n", err)
+		return
+	}
+	p.Url = attrs.MediaLink
+
+	err = saveToES(p, id)
+	if err != nil {
+		http.Error(w, "Failed to save post to ElasticSearch", http.StatusInternalServerError)
 		fmt.Printf("Failed to save post to ElasticSearch %v.\n", err)
 		return
 	}
 	fmt.Printf("Saved one post to ElasticSearch: %s", p.Message)
-
 }
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
@@ -194,4 +211,40 @@ func readFromES(lat, lon float64, ran string) ([]Post, error) {
 	}
 
 	return posts, nil
+}
+
+func saveToGCS(r io.Reader, bucketName, objectName string) (*storage.ObjectAttrs, error) {
+	ctx := context.Background() // more on context: https://blog.golang.org/context
+
+	// Creates a client.
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	bucket := client.Bucket(bucketName)
+	if _, err := bucket.Attrs(ctx); err != nil {
+		return nil, err
+	}
+
+	object := bucket.Object(objectName)
+	wc := object.NewWriter(ctx)
+	if _, err = io.Copy(wc, r); err != nil {
+		return nil, err
+	}
+	if err := wc.Close(); err != nil {
+		return nil, err
+	}
+
+	if err = object.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+		return nil, err
+	}
+
+	attrs, err := object.Attrs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Image is saved to GCS: %s\n", attrs.MediaLink)
+	return attrs, nil
 }
