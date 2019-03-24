@@ -84,7 +84,7 @@ class RegistrationForm extends React.Component {
       };
       
       return (
-        <Form {...formItemLayout} onSubmit={this.handleSubmit}>
+        <Form {...formItemLayout} onSubmit={this.handleSubmit} className="register">
           <Form.Item
             label="username"
           >
@@ -129,5 +129,5 @@ class RegistrationForm extends React.Component {
       );
     }
   }
-  
+
 export const Register = Form.create()(RegistrationForm);
