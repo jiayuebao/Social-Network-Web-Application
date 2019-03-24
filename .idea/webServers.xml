@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="8b873ca4-d4b8-4b82-91fe-deba0c9be548" name="GCP-ES" url="http://35.188.240.164:9200/">
+        <fileTransfer host="35.188.240.164" port="22" privateKey="$USER_HOME$/.ssh/authorized_keys" accessType="SFTP" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
