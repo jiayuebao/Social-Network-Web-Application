@@ -1,5 +1,6 @@
 import React from 'react';
-import {Form, Input, Button, message} from 'antd';
+import { Form, Input, Button, message } from 'antd';
+import { Link } from 'react-router-dom';
 import { API_ROOT } from '../constants';
 
 const FormItem = Form.iterm;
@@ -11,6 +12,8 @@ class RegistrationForm extends React.Component {
     };
   
     handleSubmit = (e) => {
+      console.log(this.props.history);
+      
       e.preventDefault();
       this.props.form.validateFieldsAndScroll((err, values) => {
         if (!err) {
@@ -27,6 +30,7 @@ class RegistrationForm extends React.Component {
                 throw new Error(response.statusText);
             }).then(() => {
                 message.success('Registration Succeed');
+                this.props.history.push("/login");
             }).catch((e) => {
                 message.error('Registration Failed');
                 console.log(e);
@@ -124,7 +128,9 @@ class RegistrationForm extends React.Component {
           </Form.Item>
           <Form.Item {...tailFormItemLayout}>
             <Button type="primary" htmlType="submit">Register</Button>
+            <p>Already have an account? Go back to <Link to="/login">login.</Link></p>
           </Form.Item>
+          
         </Form>
       );
     }
