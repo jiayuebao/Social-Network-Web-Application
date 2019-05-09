@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strconv"
 
+	"cloud.google.com/go/bigtable"
+	"cloud.google.com/go/storage"
 	"github.com/olivere/elastic"
 	"github.com/pborman/uuid"
 )
@@ -20,9 +22,10 @@ type Location struct {
 }
 
 type Post struct {
-	User     string   //`json:"user"`
+	User     string   `json:"user"`
 	Message  string   `json:"message"`
 	Location Location `json:"location"`
+	Url      string   `json:"url"`
 }
 
 const (
@@ -32,7 +35,9 @@ const (
 	DISTANCE = "200km"
 
 	// Needs to update this URL if you deploy it to cloud.
-	ES_URL = "http://35.222.222.92:9200"
+	ES_URL = "http://35.245.95.101:9200"
+
+	BUCKET_NAME = "mybuckethello"
 )
 
 func main() {
@@ -76,7 +81,6 @@ func createIndexIfNotExist() {
 }
 
 func handlerPost(w http.ResponseWriter, r *http.Request) {
-
 	// Parse from body of request to get a json object.
 	fmt.Println("Received one post request")
 
@@ -118,6 +122,13 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Printf("Saved one post to ElasticSearch: %s", p.Message)
+
+	bt_err := saveToBigTable(p, id)
+	if bt_err != nil {
+		http.Error(w, "Failed to save post to BigTable", http.StatusInternalServerError)
+		fmt.Printf("Failed to save post to BigTable %v. \n", bt_err)
+		return
+	}
 }
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +184,27 @@ func saveToES(post *Post, id string) error {
 	}
 
 	fmt.Printf("Post is saved to index: %s\n", post.Message)
+	return nil
+}
+
+func saveToBigTable(p *Post, id string) error {
+	ctx := context.Background()
+	bt_client, err := bigtable.NewClient(ctx, "boreal-totality-232019", "around-post")
+	if err != nil {
+		return err
+	}
+	tbl := bt_client.Open("post")
+	mut := bigtable.NewMutation()
+	mut.Set("post", "user", bigtable.Now(), []byte(p.User))
+	mut.Set("post", "message", bigtable.Now(), []byte(p.Message))
+	mut.Set("location", "lat", bigtable.Now(), []byte(strconv.FormatFloat(p.Location.Lat, 'f', -1, 64)))
+	mut.Set("location", "lon", bigtable.Now(), []byte(strconv.FormatFloat(p.Location.Lon, 'f', -1, 64)))
+
+	err = tbl.Apply(ctx, id, mut)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
 	return nil
 }
 

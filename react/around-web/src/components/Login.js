@@ -5,7 +5,7 @@ import {
 import { Link } from 'react-router-dom';
 import { API_ROOT } from '../constants';
 
-  class NormalLoginForm extends React.Component {
+class NormalLoginForm extends React.Component {
     handleSubmit = (e) => {
         console.log('handleLogin:', this.props.handleLogin)
       e.preventDefault();
