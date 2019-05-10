@@ -123,12 +123,12 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("Saved one post to ElasticSearch: %s", p.Message)
 
-	bt_err := saveToBigTable(p, id)
-	if bt_err != nil {
-		http.Error(w, "Failed to save post to BigTable", http.StatusInternalServerError)
-		fmt.Printf("Failed to save post to BigTable %v. \n", bt_err)
-		return
-	}
+	// bt_err := saveToBigTable(p, id)
+	// if bt_err != nil {
+	// 	http.Error(w, "Failed to save post to BigTable", http.StatusInternalServerError)
+	// 	fmt.Printf("Failed to save post to BigTable %v. \n", bt_err)
+	// 	return
+	// }
 }
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
