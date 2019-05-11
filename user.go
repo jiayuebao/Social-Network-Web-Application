@@ -1,53 +1,50 @@
 package main
 
-
-package main
-
 import (
-    "context"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "net/http"
-    "reflect"
-    "regexp"
-    "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"reflect"
+	"regexp"
+	"time"
 
-    jwt "github.com/dgrijalva/jwt-go"
-    "github.com/olivere/elastic"
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/olivere/elastic"
 )
 
 const (
-    USER_INDEX = "user"
-    USER_TYPE  = "user"
+	USER_INDEX = "user"
+	USER_TYPE  = "user"
 )
 
 type User struct {
-    Username string `json:"username"`
-    Password string `json:"password"`
-    Age      int64  `json:"age"`
-    Gender   string `json:"gender"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Age      int64  `json:"age"`
+	Gender   string `json:"gender"`
 }
 
 var mySigningKey = []byte("secret")
 
 func checkUser(username, password string) error {
 	// build connection
-	client, err = elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
+	client, err := elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
 	if err != nil {
 		return err
 	}
 
 	// create query
-	query := elastic.NewTermQuery("user", username)
-	
+	query := elastic.NewTermQuery("username", username)
+
 	// query ES
 	searchResult, err := client.Search().
 		Index(USER_INDEX).
 		Query(query).
 		Pretty(true).
 		Do(context.Background())
-	
+
 	if err != nil {
 		return err
 	}
@@ -55,7 +52,8 @@ func checkUser(username, password string) error {
 	// iterate to check user and password
 	var utyp User
 	for _, item := range searchResult.Each(reflect.TypeOf(utyp)) {
-		if u, ok := item.(User); ok { 
+		if u, ok := item.(User); ok {
+			fmt.Printf("username: %s\n pw: %s\n", u.Username, u.Password)
 			if username == u.Username && password == u.Password {
 				fmt.Printf("login in as %s. \n", username)
 				return nil
@@ -67,13 +65,14 @@ func checkUser(username, password string) error {
 
 func addUser(user User) error {
 	// build connection
-	client, err = elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
+	client, err := elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
+	fmt.Println(ES_URL)
 	if err != nil {
 		return err
 	}
 
 	// create a query
-	query := elastic.NewTermQuery("user", user.Username)
+	query := elastic.NewTermQuery("username", user.Username)
 
 	searchResult, err := client.Search().
 		Index(USER_INDEX).
@@ -82,12 +81,12 @@ func addUser(user User) error {
 		Do(context.Background())
 
 	if err != nil {
-			return err
-		}
-	
+		return err
+	}
+
 	if searchResult.TotalHits() > 0 { // check search result length
 		return errors.New("User already exists")
-	} 
+	}
 
 	_, err = client.Index().
 		Index(USER_INDEX).
@@ -97,19 +96,19 @@ func addUser(user User) error {
 		Refresh("wait_for").
 		Do(context.Background())
 	if err != nil {
-			return err
-		}
-	
+		return err
+	}
+
 	fmt.Printf("User is added: %s\n", user.Username)
 
 	return nil
 }
 
-func handleLogin(w http.ResponseWriter, r *http.Request) {
+func handlerLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received one login request")
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	
+
 	if r.Method == "OPTIONS" {
 		return
 	}
@@ -128,13 +127,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "Failed to read from ElasticSearch", http.StatusInternalServerError)
 		}
-		return 
+		return
 	}
 
 	// create a new token object
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": user.Username,
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
@@ -147,11 +146,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(tokenString))
 }
 
-func handleSignup(w http.ResponseWriter, r *http.Request) {
+func handlerSignup(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received one signup request")
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	
+
 	if r.Method == "OPTIONS" {
 		return
 	}
@@ -164,9 +163,11 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.Username == "" || user.Password == "" || regexp.MustCompile("*[a-z0-9_]+").MatchString(user.Username) {
-		http.Error(w, "Cannot decode user data from client", http.StatusBadRequest)
-		fmt.Printf("Cannot decode user data from client %v.\n", err)
+	if user.Username == "" || user.Password == "" || !regexp.MustCompile("^[a-z0-9_]+$").MatchString(user.Username) {
+		http.Error(w, "Invalid username or password", http.StatusBadRequest)
+		fmt.Println("Invalid username or password")
+		fmt.Println("username: " + user.Username)
+		fmt.Println("pw: " + user.Password)
 		return
 	}
 

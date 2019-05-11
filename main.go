@@ -12,6 +12,8 @@ import (
 
 	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/storage"
+	jwtmiddleware "github.com/auth0/go-jwt-middleware"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/olivere/elastic"
 	"github.com/pborman/uuid"
@@ -36,7 +38,7 @@ const (
 	DISTANCE = "200km"
 
 	// Needs to update this URL if you deploy it to cloud.
-	ES_URL = "http://35.245.95.101:9200"
+	ES_URL = "http://35.221.21.232:9200"
 
 	BUCKET_NAME = "mybuckethello"
 )
@@ -45,10 +47,19 @@ func main() {
 	fmt.Println("started-service")
 	createIndexIfNotExist()
 
+	jwtMiddleware := jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+			return []byte(mySigningKey), nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
+
 	r := mux.NewRouter()
 
-	r.Handle("/post", http.HandleFunc(handlerPost)).Methods("POST", "OPTIONS")
-	r.Handle("/search", http.HandleFunc(handlerSearch)).Methods("GET", "OPTIONS")
+	r.Handle("/post", jwtMiddleware.Handler(http.HandlerFunc(handlerPost))).Methods("POST", "OPTIONS")
+	r.Handle("/search", jwtMiddleware.Handler(http.HandlerFunc(handlerSearch))).Methods("GET", "OPTIONS")
+	r.Handle("/signup", http.HandlerFunc(handlerSignup)).Methods("POST", "OPTIONS")
+	r.Handle("/login", http.HandlerFunc(handlerLogin)).Methods("POST", "OPTIONS")
 
 	http.Handle("/", r)
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -83,6 +94,17 @@ func createIndexIfNotExist() {
 		}
 	}
 
+	exists, err = client.IndexExists(USER_INDEX).Do(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	if !exists {
+		_, err = client.CreateIndex(USER_INDEX).Do(context.Background())
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func handlerPost(w http.ResponseWriter, r *http.Request) {
@@ -96,11 +118,16 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		return
 	}
+
+	user := r.Context().Value("user")
+	claims := user.(*jwt.Token).Claims
+	username := claims.(jwt.MapClaims)["username"]
+
 	lat, _ := strconv.ParseFloat(r.FormValue("lat"), 64)
 	lon, _ := strconv.ParseFloat(r.FormValue("lon"), 64)
 
 	p := &Post{
-		User:    r.FormValue("user"),
+		User:    username.(string),
 		Message: r.FormValue("message"),
 		Location: Location{
 			Lat: lat,
